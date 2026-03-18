@@ -210,10 +210,10 @@ This project builds on [StableVITON](https://github.com/rlawjdghek/StableVITON),
 ## Citation
 
 ```bibtex
-@misc{chen2024viton,
+@misc{chen2026viton,
   title   = {Improving Diffusion-Based Virtual Try-On for Real-World Applications},
   author  = {Tiancheng Chen and Haifan Zhao},
-  year    = {2024},
+  year    = {2026},
   school  = {University of California, San Diego},
   note    = {ECE285 Final Project}
 }
