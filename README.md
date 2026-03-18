@@ -200,11 +200,6 @@ where L_ATV penalises spatially dispersed attention activations to suppress colo
 
 ---
 
-## Project Report
-
-The full technical report is included in this repository: [`ECE285_final_draft.pdf`](./ECE285_final_draft.pdf)
-
----
 
 ## Acknowledgements
 
