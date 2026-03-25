@@ -5,82 +5,152 @@
 
 ---
 
+# Improving Diffusion-Based Virtual Try-On for Real-World Applications
+
+> ECE285 Final Project — University of California, San Diego  
+> **Tiancheng Chen** · **Haifan Zhao**
+
+---
+
 ## Overview
 
-This project proposes an **unpaired diffusion-based virtual try-on framework** that allows users to visualize how a garment looks when worn, without requiring physical fittings or paired training data. Given a person image and an independently collected garment image, the system synthesizes a photorealistic try-on result that:
+This repository contains the code, experiment scripts, and supplementary materials for our ECE285 final project on **unpaired diffusion-based virtual try-on**.
 
-- Preserves the person's body structure and pose
-- Accurately transfers fine-grained garment details (logos, textures, embroidery)
-- Produces realistic clothing dynamics (natural wrinkles and shading)
+Given a person image and an independently collected garment image, the proposed framework synthesizes a photorealistic try-on result that aims to:
 
-Key innovations over prior work:
+- preserve the person's body structure and pose,
+- transfer fine-grained garment details such as logos, textures, and embroidery,
+- maintain realistic clothing appearance with natural wrinkles and shading.
 
-- **Dual-path garment encoder** — combines CLIP (global semantics) with a fine-grained vision encoder (local texture), fused via a learnable weighted sum
-- **Unpaired training strategy** — geometric and appearance augmentation + attention total variation loss (L_ATV), enabling semantic correspondence without paired supervision
-- **Mask-guided generation** — concatenates a clothing segmentation mask to the U-Net input to restrict synthesis to the garment region
+The project was designed to improve diffusion-based virtual try-on under real-world conditions, especially when **paired supervision is unavailable**.
 
----
+The core design includes:
 
-## Architecture
+- **Dual-path garment encoding**: global semantic features from CLIP and local texture features from a fine-grained encoder are fused.
+- **Unpaired training strategy**: semantic correspondence is encouraged through augmentation and attention regularization.
+- **Mask-guided generation**: a clothing mask is concatenated into the diffusion U-Net input to better localize garment synthesis.
 
-```
-Garment Image ──► CLIP Image Encoder ──────────────────► Feature Fusion (λ) ──►
-               └─► Fine-grained CNN (ResNet) ──────────►                        │
-                                                                                 ▼
-Person Image ──► Pose Estimator ──► Pose Map ──────────────────────► U-Net Diffusion Model ──► Final Try-On Image
-             ├─► Segmentation & Inpainting ──► Agnostic Map ──────►     (Cross-Attention)
-             └─► Mask Generation ──► Segmentation Mask ───────────►
-```
-
-The U-Net receives a concatenated **13-channel** input:
-
-| Channel(s) | Source |
-|---|---|
-| 4 | Noisy latent z_t |
-| 4 | VAE-encoded agnostic map |
-| 1 | Binary clothing mask |
-| 4 | VAE-encoded DensePose map |
-
-Zero cross-attention blocks in the U-Net decoder learn implicit garment-body alignment in latent space — no explicit warping network required.
+The repository includes not only inference scripts and notebooks, but also the core model implementation under `src/`, which contains the modified attention, transformer, U-Net, and try-on pipeline source code.
 
 ---
 
-## Results
+## Repository Structure
+```text
+.
+├── README.md
+├── environment.yaml
+├── inference.py
+├── inference_dc.py
+├── ECE285_FINAL_ablation (1).ipynb
+├── preprocess.tar.gz
+├── viton_ablation4.tar.gz
+└── src/
+    ├── tryon_pipeline.py
+    ├── attentionhacked_*.py
+    ├── transformerhacked_*.py
+    ├── unet_block_hacked_*.py
+    ├── unet_hacked_garmnet.py
+    └── unet_hacked_tryon.py
+```
 
-### Quantitative Comparison (VITON-HD)
+### Repository Contents
 
-| Method | LPIPS ↓ | SSIM ↑ | FID ↓ |
-|---|---|---|---|
-| Pre-VTON (Baseline) | 0.153 | 0.826 | 9.98 |
-| **Ours (Proposed)** | **0.110** | **0.923** | **6.89** |
+The repository includes the following main files:
 
-### Ablation Study (Paired Setting)
+- **`environment.yaml`**  
+  Conda environment specification for dependency setup.
+- **`inference.py`**  
+  Main inference script for generating try-on results.
+- **`inference_dc.py`**  
+  Inference or variant script used for conditioning-related experiments and ablation-style testing.
+- **`ECE285_FINAL_ablation (1).ipynb`**  
+  Notebook containing the ablation pipeline and experiment procedures used for the project analysis.
+- **`preprocess.tar.gz`**  
+  Archived preprocessing-related source files and utilities.
+- **`viton_ablation4.tar.gz`**  
+  Archived ablation-related source files or experiment assets.
+- **`src/`**  
+  Core model implementation directory. This folder contains the internal source code of the diffusion-based virtual try-on system, including:
+  - modified attention modules,
+  - modified transformer blocks,
+  - hacked U-Net blocks,
+  - garment-conditioned U-Net modules,
+  - try-on generation U-Net modules,
+  - and the main try-on pipeline implementation.
 
-| Configuration | LPIPS ↓ | SSIM ↑ | FID ↓ |
-|---|---|---|---|
-| Baseline (CLIP only) | 0.142 | 0.854 | 8.75 |
-| + Dual-Path Encoder | 0.125 | 0.891 | 7.42 |
-| + L_ATV (Full Model) | **0.110** | **0.923** | **6.89** |
+---
+
+## Method Summary
+
+### Architecture
+
+The framework combines garment features, pose information, segmentation-derived conditioning, and diffusion-based generation in a unified pipeline.
+
+A high-level view is:
+```
+Garment Image ──► CLIP Image Encoder ──────────────────► Feature Fusion ──►
+               └─► Fine-grained Encoder ───────────────►                 │
+                                                                          ▼
+Person Image ──► Pose / DensePose ─────────────────────────────────► Diffusion U-Net ──► Final Try-On Image
+             ├─► Agnostic Representation ───────────────────────────►
+             └─► Clothing Mask ─────────────────────────────────────►
+```
+
+The U-Net takes a concatenated multi-channel conditioning input consisting of:
+
+- noisy latent,
+- VAE-encoded agnostic representation,
+- binary clothing mask,
+- and VAE-encoded DensePose representation.
+
+This design allows the model to preserve body structure while restricting synthesis to garment-relevant regions.
+
+### Core Ideas
+
+- **Dual-path garment encoder**  
+  A coarse semantic representation and a fine-grained texture representation are fused for better garment fidelity.
+- **Implicit alignment through attention**  
+  Instead of relying on an explicit warping module, the model uses attention-based conditioning to align garment information with the target person.
+- **Attention regularization**  
+  An attention total variation loss is used to reduce overly dispersed attention and suppress artifacts such as boundary color bleeding.
+
+---
+
+## Quantitative Results
+
+### Main Comparison (VITON-HD)
+
+| Method              | LPIPS ↓ | SSIM ↑ | FID ↓ |
+|---------------------|---------|--------|-------|
+| Pre-VTON (Baseline) | 0.153   | 0.826  | 9.98  |
+| Ours (Proposed)     | 0.110   | 0.923  | 6.89  |
+
+### Paired Ablation Study
+
+| Configuration              | LPIPS ↓ | SSIM ↑ | FID ↓ |
+|----------------------------|---------|--------|-------|
+| Baseline (CLIP only)       | 0.142   | 0.854  | 8.75  |
+| + Dual-Path Encoder        | 0.125   | 0.891  | 7.42  |
+| + L_ATV (Full Model)       | 0.110   | 0.923  | 6.89  |
+
+These results indicate that the proposed conditioning and regularization strategies improve both structural similarity and perceptual realism.
 
 ---
 
 ## Dataset
 
-We use the **[VITON-HD](https://github.com/shadow2496/VITON-HD)** benchmark (11,647 training pairs · 2,032 test pairs · 1024×768 resolution).
+We use the **VITON-HD** benchmark for evaluation and analysis.
 
-The dataset provides: clothing-agnostic maps, binary agnostic masks, DensePose surface maps, human parsing results, and garment masks — all used directly as conditioning inputs.
+The dataset provides conditioning signals commonly used in virtual try-on, including:
 
-**Download our preprocessed dataset here:**
-[Google Drive](https://drive.google.com/file/d/1tLx8LRp-sxDp0EcYmYoV_vXdSc-jJ79w/view)
+- person images,
+- garment images,
+- clothing-agnostic representations,
+- agnostic masks,
+- DensePose maps,
+- parsing results.
 
-After downloading, extract it to the `data/` directory:
-
-```bash
-unzip viton_hd_dataset.zip -d data/
-```
-
-Expected structure:
-
+If you use a preprocessed version of the dataset, place it under a `data/` directory with a structure similar to:
 ```
 data/
 ├── train/
@@ -99,122 +169,116 @@ data/
     └── parse/
 ```
 
+If preprocessing is needed, refer to the files included in `preprocess.tar.gz`.
+
 ---
 
-## Installation
+## Environment Setup
 
-### Requirements
-
-- Python 3.8+
-- CUDA-compatible GPU (tested on NVIDIA A100)
-- PyTorch 2.0+
-
-### Setup
-
+This repository uses a Conda environment file:
 ```bash
-# Clone the repository
-git clone https://github.com/Tiancheng0125/ece285-viton.git
-cd ece285-viton
-
-# Create a virtual environment
-conda create -n viton python=3.9
+conda env create -f environment.yaml
 conda activate viton
-
-# Install dependencies
-pip install -r requirements.txt
 ```
+
+If your environment name differs from `viton`, replace it with the name specified in `environment.yaml`.
 
 ---
 
-## Training
+## How to Run
 
+### 1. Main Inference
+
+Run the main inference script to generate try-on results:
 ```bash
-python train.py \
-  --data_dir data/train \
-  --output_dir checkpoints/ \
-  --batch_size 4 \
-  --lr 1e-5 \
-  --max_steps 30000 \
-  --lambda_atv 1.0 \
-  --lambda_fine 0.0
+python inference.py
 ```
 
-Key arguments:
+### 2. Conditioning or Variant Inference
 
-| Argument | Default | Description |
-|---|---|---|
-| `--lambda_atv` | `1.0` | Weight for attention total variation loss |
-| `--lambda_fine` | `0.0` | Weight λ for fine-grained encoder (dual-path fusion) |
-| `--batch_size` | `4` | Training batch size |
-| `--max_steps` | `30000` | Total training steps |
-
----
-
-## Inference
-
+For ablation-style or conditioning-related experiments:
 ```bash
-python inference.py \
-  --checkpoint checkpoints/final.ckpt \
-  --person_image path/to/person.jpg \
-  --garment_image path/to/garment.jpg \
-  --output_dir results/
+python inference_dc.py
 ```
 
----
+### 3. Ablation Notebook
 
-## Evaluation
-
+To reproduce or inspect the ablation pipeline used in the project:
 ```bash
-# Paired setting (SSIM, LPIPS)
-python evaluate.py --mode paired --data_dir data/test --pred_dir results/
-
-# Unpaired / No-GT setting (CLIP-I, FID, KID)
-python evaluate.py --mode unpaired --data_dir data/test --pred_dir results/
+jupyter notebook "ECE285_FINAL_ablation (1).ipynb"
 ```
+
+### 4. Core Model Source
+
+The internal model implementation is located in:
+```
+src/
+```
+
+This directory contains the modified attention, transformer, U-Net, and pipeline code used by the try-on framework.
 
 ---
 
-## Method Details
+## Archived Source Files
 
-### Dual-Path Garment Encoding
+Two archived files are included:
 
-```
-f_coarse  = CLIP_img(x_g)                          # global semantics
-f_fine    = FineEncoder({p_1, ..., p_K, p_thumb})  # local texture details
-c_garment = f_coarse + λ · f_fine                  # fused representation
-```
+- `preprocess.tar.gz`
+- `viton_ablation4.tar.gz`
 
-### Zero Cross-Attention (Implicit Alignment)
-
-```
-O_h = SelfAttention(O_s) + λ · CrossAttention(O_s, c_garment)
+Extract them with:
+```bash
+tar -xzvf preprocess.tar.gz
+tar -xzvf viton_ablation4.tar.gz
 ```
 
-### Training Objective
-
-```
-L_total = L_LDM + λ_ATV · L_ATV
-```
-
-where L_ATV penalises spatially dispersed attention activations to suppress colour bleeding at garment boundaries.
+These archives contain additional source files, preprocessing utilities, or ablation-related experiment files used in the project.
 
 ---
 
+## Code-to-Paper Mapping
+
+For clarity, the repository files correspond to the project components as follows:
+
+| Component                                     | File(s)                                  |
+|-----------------------------------------------|------------------------------------------|
+| Main inference / qualitative generation       | `inference.py`                           |
+| Conditioning variants / ablation-style inference | `inference_dc.py`                     |
+| Ablation workflow and experiment analysis     | `ECE285_FINAL_ablation (1).ipynb`        |
+| Core diffusion model implementation           | `src/`                                   |
+| Preprocessing utilities                       | `preprocess.tar.gz`                      |
+| Additional ablation assets or source files    | `viton_ablation4.tar.gz`                 |
+
+---
+
+## Notes on Reproducibility
+
+This repository contains the main scripts, notebook-based ablation workflow, environment file, archived supporting source files, and the core model implementation under `src/`.
+
+Before running the code, users should check:
+
+- local path settings in the Python scripts and notebook,
+- expected dataset folder structure,
+- checkpoint locations,
+- output directories.
+
+If needed, update paths in the scripts to match the local environment.
+
+---
 
 ## Acknowledgements
 
-This project builds on [StableVITON](https://github.com/rlawjdghek/StableVITON), [DH-VTON](https://github.com/jiaweiwei2/DH-VTON), and the [VITON-HD](https://github.com/shadow2496/VITON-HD) dataset. We thank the authors of Stable Diffusion, DINOv2, and DensePose for their open-source contributions.
+This project builds on ideas and resources from prior virtual try-on and diffusion-based generation works, including datasets and open-source implementations related to VITON-HD, StableVITON, and related baselines.
 
 ---
 
 ## Citation
-
 ```bibtex
 @misc{chen2026viton,
   title   = {Improving Diffusion-Based Virtual Try-On for Real-World Applications},
   author  = {Tiancheng Chen and Haifan Zhao},
   year    = {2026},
-  school  = {University of California, San Diego},
-  note    = {ECE285 Final Project}
+  note    = {ECE285 Final Project, University of California, San Diego}
 }
+```
 ```
